@@ -1,0 +1,240 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+
+from app.core.permissions import require_roles
+from app.db.database import get_db
+
+from app.models.project import Project
+from app.models.project_milestone import ProjectMilestone
+from datetime import date
+from app.schemas.project_milestone import (
+    ProjectMilestoneCreate,
+    ProjectMilestoneUpdate,
+    ProjectMilestoneResponse,
+    ProjectMilestoneEnrichedResponse,
+)
+
+router = APIRouter(
+    prefix="/milestones",
+    tags=["Project Milestones"],
+)
+
+VALID_STATUSES = {
+    "Pending",
+    "In Progress",
+    "Completed",
+}
+
+ALL_ROLES = ("Administrator", "Project Manager", "Site Engineer", "Client", "Client / Owner", "Vendor", "Contractor", "Worker")
+
+
+def _enrich(m: ProjectMilestone) -> ProjectMilestoneEnrichedResponse:
+    return ProjectMilestoneEnrichedResponse(
+        milestone_id=m.milestone_id,
+        project_id=m.project_id,
+        project_name=m.project.project_name if m.project else "",
+        milestone_name=m.milestone_name,
+        description=m.description,
+        due_date=m.due_date,
+        completion_date=m.completion_date,
+        status=m.status,
+        progress_percentage=m.progress_percentage,
+    )
+
+
+@router.get(
+    "/enriched",
+    response_model=List[ProjectMilestoneEnrichedResponse],
+    summary="All milestones with project_name (for frontend)",
+)
+def get_milestones_enriched(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(*ALL_ROLES)),
+):
+    milestones = db.query(ProjectMilestone).all()
+    return [_enrich(m) for m in milestones]
+
+
+@router.post(
+    "",
+    response_model=ProjectMilestoneResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_milestone(
+    payload: ProjectMilestoneCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(
+require_roles(*ALL_ROLES)
+    ),
+):
+    project = db.query(Project).filter(
+        Project.project_id == payload.project_id
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found.",
+        )
+
+    duplicate = db.query(ProjectMilestone).filter(
+        ProjectMilestone.project_id == payload.project_id,
+        ProjectMilestone.milestone_name == payload.milestone_name,
+    ).first()
+
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail="Milestone already exists for this project.",
+        )
+
+    if payload.status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status must be one of: {', '.join(VALID_STATUSES)}",
+        )
+
+    milestone = ProjectMilestone(**payload.model_dump())
+
+    db.add(milestone)
+
+    project = db.query(Project).filter(Project.project_id == milestone.project_id).first()
+    if project:
+
+        # --- Auto-Completion Logic ---
+        # Recalculate total project progress
+        all_milestones = db.query(ProjectMilestone).filter(ProjectMilestone.project_id == project.project_id).all()
+        total_progress = sum((m.progress_percentage or 0) for m in all_milestones if m.status == "Completed")
+        
+        if total_progress >= 100 and project.status and project.status.status_name != "Completed":
+                # Find 'Completed' status ID
+                from app.models.project_status import ProjectStatus
+                completed_status = db.query(ProjectStatus).filter(ProjectStatus.status_name == "Completed").first()
+                if completed_status:
+                        project.status_id = completed_status.status_id
+                        import datetime
+                        project.actual_end_date = datetime.date.today()
+
+    db.commit()
+    db.refresh(milestone)
+
+    return milestone
+
+@router.get(
+    "",
+    response_model=list[ProjectMilestoneResponse],
+)
+def get_milestones(
+    db: Session = Depends(get_db),
+    current_user=Depends(
+require_roles(*ALL_ROLES)
+    ),
+):
+    return db.query(ProjectMilestone).all()
+
+@router.get(
+    "/{milestone_id}",
+    response_model=ProjectMilestoneResponse,
+)
+def get_milestone(
+    milestone_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(
+require_roles(*ALL_ROLES)
+    ),
+):
+    milestone = db.query(ProjectMilestone).filter(
+        ProjectMilestone.milestone_id == milestone_id
+    ).first()
+
+    if not milestone:
+        raise HTTPException(
+            status_code=404,
+            detail="Milestone not found.",
+        )
+
+    return milestone
+
+@router.put(
+    "/{milestone_id}",
+    response_model=ProjectMilestoneResponse,
+)
+def update_milestone(
+    milestone_id: int,
+    payload: ProjectMilestoneUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(
+require_roles(*ALL_ROLES)
+    ),
+):
+    milestone = db.query(ProjectMilestone).filter(
+        ProjectMilestone.milestone_id == milestone_id
+    ).first()
+
+    if not milestone:
+        raise HTTPException(
+            status_code=404,
+            detail="Milestone not found.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    status = update_data.get("status")
+
+    if status == "Completed":
+        if update_data.get("completion_date") is None:
+            update_data["completion_date"] = date.today()
+
+    elif status in {"Pending", "In Progress"}:
+        update_data["completion_date"] = None
+
+    for key, value in update_data.items():
+        setattr(milestone, key, value)
+
+
+    project = db.query(Project).filter(Project.project_id == milestone.project_id).first()
+    if project:
+
+        # --- Auto-Completion Logic ---
+        # Recalculate total project progress
+        all_milestones = db.query(ProjectMilestone).filter(ProjectMilestone.project_id == project.project_id).all()
+        total_progress = sum((m.progress_percentage or 0) for m in all_milestones if m.status == "Completed")
+        
+        if total_progress >= 100 and project.status and project.status.status_name != "Completed":
+                # Find 'Completed' status ID
+                from app.models.project_status import ProjectStatus
+                completed_status = db.query(ProjectStatus).filter(ProjectStatus.status_name == "Completed").first()
+                if completed_status:
+                        project.status_id = completed_status.status_id
+                        import datetime
+                        project.actual_end_date = datetime.date.today()
+
+    db.commit()
+    db.refresh(milestone)
+
+    return milestone
+
+@router.delete(
+    "/{milestone_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_milestone(
+    milestone_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(
+        require_roles("Administrator")
+    ),
+):
+    milestone = db.query(ProjectMilestone).filter(
+        ProjectMilestone.milestone_id == milestone_id
+    ).first()
+
+    if not milestone:
+        raise HTTPException(
+            status_code=404,
+            detail="Milestone not found.",
+        )
+
+    db.delete(milestone)
+    db.commit()

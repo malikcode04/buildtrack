@@ -1,0 +1,58 @@
+<div class="bt-auth-page">
+  <div class="bt-auth-card" style="max-width:480px;">
+    <a class="bt-auth-logo" [routerLink]="['/']" style="text-decoration:none;">
+      <div class="bt-auth-logo-badge">BT</div>
+      <span class="bt-auth-logo-text">BuildTrack</span>
+    </a>
+
+    <h1 class="bt-auth-title">Create your account</h1>
+    <p class="bt-auth-subtitle">Set up access to manage projects, sites, and teams.</p>
+
+    <div class="bt-auth-error" *ngIf="error">{{ error }}</div>
+    <div class="bt-auth-success" *ngIf="success">Account created successfully! You can now sign in.</div>
+
+    <form class="bt-auth-form" [formGroup]="form" (ngSubmit)="submit()" *ngIf="!success">
+      <label class="bt-auth-field">
+        <span>Username</span>
+        <input type="text" formControlName="username" placeholder="e.g. priya.menon" />
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Full Name</span>
+        <input type="text" formControlName="name" placeholder="Full Name" />
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Email</span>
+        <input type="email" formControlName="email" placeholder="you@company.com" autocomplete="email" />
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Phone Number (10 digits)</span>
+        <input type="text" formControlName="phoneNumber" placeholder="9876543210" />
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Role</span>
+        <select formControlName="role">
+          <option value="" disabled selected>Select your role</option>
+          <option *ngFor="let r of roles" [value]="r">{{ r }}</option>
+        </select>
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Password</span>
+        <input type="password" formControlName="password" placeholder="At least 6 characters" autocomplete="new-password" />
+      </label>
+
+      <button type="submit" class="bt-auth-submit" [disabled]="submitting">
+        {{ (submitting ? 'Creating account...' : 'Create Account') }}
+      </button>
+    </form>
+
+    <div class="bt-auth-footer">
+      Already have an account?
+      <a class="bt-auth-link" [routerLink]="['/login']">Sign in</a>
+    </div>
+  </div>
+</div>

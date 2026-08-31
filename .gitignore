@@ -1,0 +1,9 @@
+node_modules/
+.angular/
+.venv/
+__pycache__/
+*.pyc
+dist/
+tmp/
+.env
+frontend/buildtrack-frontend/scratch/

@@ -1,0 +1,39 @@
+<div class="bt-auth-page">
+  <div class="bt-auth-card">
+    <a class="bt-auth-logo" [routerLink]="['/']" style="text-decoration:none;">
+      <div class="bt-auth-logo-badge">BT</div>
+      <span class="bt-auth-logo-text">BuildTrack</span>
+    </a>
+
+    <h1 class="bt-auth-title">Welcome back</h1>
+    <p class="bt-auth-subtitle">Sign in to manage your projects, sites, and teams.</p>
+
+    <div class="bt-auth-error" *ngIf="error">{{ error }}</div>
+
+    <form class="bt-auth-form" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="bt-auth-field">
+        <span>Email or Full Name</span>
+        <input type="text" formControlName="username" placeholder="e.g. you@company.com" autocomplete="username" />
+      </label>
+
+      <label class="bt-auth-field">
+        <span>Password</span>
+        <input type="password" formControlName="password" placeholder="Enter your password" autocomplete="current-password" />
+      </label>
+
+      <div class="bt-auth-row">
+        <span></span>
+        <a class="bt-auth-link" [routerLink]="['/reset-password']">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="bt-auth-submit" [disabled]="submitting">
+        {{ (submitting ? 'Signing in...' : 'Sign In') }}
+      </button>
+    </form>
+
+    <div class="bt-auth-footer">
+      Don't have an account?
+      <a class="bt-auth-link" [routerLink]="['/register']">Create one</a>
+    </div>
+  </div>
+</div>
