@@ -11,6 +11,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def fix_database_url(url: str) -> str:
     if not url or "://" not in url:
         return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
     scheme, rest = url.split("://", 1)
     if "@" in rest:
         last_at = rest.rfind("@")

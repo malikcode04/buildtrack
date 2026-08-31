@@ -11,14 +11,17 @@ def ensure_database_exists():
     except Exception as e:
         err_msg = str(e)
         if "does not exist" in err_msg or "3D000" in err_msg:
-            default_url = DATABASE_URL.rsplit('/', 1)[0] + '/postgres'
-            db_name = DATABASE_URL.rsplit('/', 1)[1]
-            temp_engine = create_engine(default_url, isolation_level="AUTOCOMMIT")
-            with temp_engine.connect() as conn:
-                conn.execute(text(f'CREATE DATABASE "{db_name}";'))
-            temp_engine.dispose()
+            try:
+                default_url = DATABASE_URL.rsplit('/', 1)[0] + '/postgres'
+                db_name = DATABASE_URL.rsplit('/', 1)[1]
+                temp_engine = create_engine(default_url, isolation_level="AUTOCOMMIT")
+                with temp_engine.connect() as conn:
+                    conn.execute(text(f'CREATE DATABASE "{db_name}";'))
+                temp_engine.dispose()
+            except Exception as create_err:
+                print(f"Database auto-creation bypassed: {create_err}")
         else:
-            raise e
+            print(f"Engine connection warning: {e}")
 
 def init_db():
     ensure_database_exists()
